@@ -1,0 +1,9 @@
+Data/
+Output/
+Logs/
+Resources/
+*.jpg
+*.pdf
+*.png
+*.gif
+*.jpeg
