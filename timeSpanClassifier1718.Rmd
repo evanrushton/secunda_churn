@@ -16,11 +16,13 @@ library(randomForest)
 library(glmnet)
 library(caret)
 ```
+
 ```{r}
 
-# ATTENTION: This data won't work because it is aggregated aross subscription duration. Need to constrina the data during aggregation step in JQL
+# ATTENTION: The data "./Data/ChurnSeg_Past_6_months_.csv" won't work because it is aggregated aross subscription duration. Need to constrina the data during aggregation step in JQL
 
 data1718 <- read_csv("./Data/ChurnSeg_Past_6_months_.csv") # 53203
+dataASO <- read_csv("./Data/Churn_5-week_windows_Past_3_months.csv")
 # Converting value.sub_Start and value.sub_End to Date (exclude time)
 data1718$value.sub_End <- as.Date(data1718$value.sub_End, "%Y-%m-%d");
 data1718$value.sub_Start <- as.Date(data1718$value.sub_Start, format="%Y-%m-%d")
