@@ -1,0 +1,181 @@
+---
+title: "codeSpark Churn"
+author: "Evan Rushton"
+date: "10/25/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(BTYD)
+library(lubridate)
+library(scales)
+theme_set(theme_light())
+options(scipen = 5)
+```
+
+Within a ~4 month time window, (2/01/18 to 06/01/18), user AppOpen behavior decays at varying rates.
+
+Can a model predict how likely someone will churn based on AppOpen data from a subscription service?
+
+### First we load and clean the data
+```{r}
+app_opens <- read.csv('./Data/NBDparetoFebMay.csv') 
+# Convert time in ms to dates by day
+names(app_opens)[2] <- "date"
+app_opens$date <- format(as.POSIXct(app_opens$date / 1000, origin = "1970-01-01", tz = "America/Los_Angeles"), "%Y%m%d")
+app_opens$date <- as.Date(app_opens$date, "%Y%m%d")
+count_id <- count(app_opens$id)
+count_date <- count(app_opens$date)
+```
+
+### How many users were active?
+
+```{r}
+length(unique(app_opens$uid))
+```
+
+31,230 unique users across 4 months. We can assign integer values to unique users with a join.
+
+```{r}
+users <- unique(app_opens$uid) %>% 
+  as.data.frame() %>% 
+  mutate(id = seq.int(length(unique(app_opens$uid))))
+names(users)[1] <- "uid"
+app_opens <- merge(app_opens, users, by = "uid") %>% 
+  arrange(uid, date)
+```
+
+# Exploration
+
+Check NA values
+```{r}
+sapply(app_opens, function(y) sum(length(which(is.na(y))))) # None - nice
+```
+
+How often are users opening the app?
+
+```{r}
+app_opens %>% 
+  ggplot(aes(id)) +
+  geom_histogram()
+```
+
+Slight downward trend in appOpen events by date in Spring
+
+```{r}
+count_date %>% 
+  ggplot(aes(x=x, y=freq)) +
+  geom_point() +
+  geom_smooth(method = 'lm' )
+```
+
+### NBD/Pareto
+
+```{r}
+elogSpring <- app_opens[, c("id", "date")]
+names(elogSpring)[1] <- "cust"
+elogSpringM <- dc.MergeTransactionsOnSameDate(elogSpring)
+```
+
+Check the shape of time between opens to ensure NBD/Pareto is a good fit
+
+```{r}
+openFreq <- ddply(elogSpringM, .(cust), summarize, 
+                      daysBetween = as.numeric(diff(date)))
+
+ggplot(openFreq,aes(x=daysBetween))+
+  geom_histogram(fill="orange")+
+  xlab("Time between opens (days)")
+```
+
+Merging the counts on a single day happens
+
+```{r}
+elogSpring$date<-as.POSIXct(elogSpring$date)
+# splitting data
+(end.of.cal.period <- min(elogSpring$date)+(max(elogSpring$date)-min(elogSpring$date))/2)
+dataSpring <- dc.ElogToCbsCbt(elogSpring, per="day", # merged or not give same result
+                        T.cal=end.of.cal.period,
+                        statistic = "freq") 
+cal2.cbs <- as.matrix(dataSpring[[1]][[1]])
+str(cal2.cbs)
+```
+
+```{r}
+#Parameter estimation
+(params2 <- pnbd.EstimateParameters(cal2.cbs))
+(LL <- pnbd.cbs.LL(params2, cal2.cbs))
+# it is a good idea to make a few more estimates to see if they converge
+p.matrix <- c(params2, LL)
+for (i in 1:5) {
+  params2 <- pnbd.EstimateParameters(cal2.cbs, params2)
+  LL <- pnbd.cbs.LL(params2, cal2.cbs)
+  p.matrix.row <- c(params2, LL)
+  p.matrix <- rbind(p.matrix, p.matrix.row)
+}
+
+p.matrix
+(params2 <- p.matrix[dim(p.matrix)[1],1:4])
+
+param.names <- c("r", "alpha", "s", "beta")
+
+LL <- pnbd.cbs.LL(params2, cal2.cbs)
+#contour plots
+dc.PlotLogLikelihoodContours(pnbd.cbs.LL, params2, cal.cbs = cal2.cbs , n.divs = 5,
+                             num.contour.lines = 7, zoom.percent = 0.3,
+                             allow.neg.params = FALSE, param.names = param.names)
+#heterogeneity of open
+pnbd.PlotTransactionRateHeterogeneity(params2, lim = NULL)
+#heterogeneity of drop out
+pnbd.PlotDropoutRateHeterogeneity(params2)
+
+#individual predicitions - 2 month (60 day) period - new customer
+pnbd.Expectation(params2, t = 60) # 5.961658 days with AppOpen events
+
+#individual predictions - 2 month period - existing customer
+cal2.cbs["1420",]
+x <- cal2.cbs["1420", "x"]         
+t.x <- cal2.cbs["1420", "t.x"]     
+T.cal <- cal2.cbs["1420", "T.cal"]
+pnbd.ConditionalExpectedTransactions(params2, T.star = 60, 
+                                     x, t.x, T.cal)
+
+#probabilities of customers being alive
+
+x          
+t.x        
+#end of calibration
+T.cal <- 60
+pnbd.PAlive(params2, x, t.x, T.cal)
+p.alives <- pnbd.PAlive(params2, cal2.cbs[,"x"], cal2.cbs[,"t.x"], cal2.cbs[,"T.cal"])
+ggplot(as.data.frame(p.alives),aes(x=p.alives))+
+  geom_histogram(colour="grey",fill="orange")+
+  ylab("Number of Customers")+
+  xlab("Probability Customer is 'Live'")+
+  theme_minimal()
+pnbd.PlotFrequencyInCalibration(params2, cal2.cbs, 
+                                censor=8, title="Model vs. Reality during Calibration")
+#assess model in holdout period
+x.star   <- dataSpringM[[2]][[2]][,1]
+cal2.cbs <- cbind(cal2.cbs, x.star)
+str(cal2.cbs)
+
+holdoutdates <- attributes(dataSpringM[[2]][[1]])[[2]][[2]]
+holdoutlength <- round(as.numeric(max(as.Date(holdoutdates))-
+                                    min(as.Date(holdoutdates)))/7)
+
+T.star <- holdoutlength
+censor <- 7 
+comp <- pnbd.PlotFreqVsConditionalExpectedFrequency(params2, T.star,
+                                                    cal2.cbs, x.star, censor)
+```
+
+### Attribution
+This code is revised from emarkou on github https://github.com/blendo-app/NBD-Pareto-churn-model using the BTYD package. This flow is emulating @drob's Tidy Tuesday style https://www.youtube.com/watch?v=3-DRwg9yeNA

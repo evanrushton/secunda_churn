@@ -2,8 +2,10 @@ Data/
 Output/
 Logs/
 Resources/
+R-hacks/
 *.jpg
 *.pdf
 *.png
 *.gif
 *.jpeg
+.Rhistory

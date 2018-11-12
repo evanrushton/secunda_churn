@@ -1,0 +1,44 @@
+---
+title: "Timespan Classifier 17-18"
+author: "Evan Rushton"
+date: "10/25/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(corrplot)
+library(randomForest)
+library(glmnet)
+library(caret)
+```
+```{r}
+
+# ATTENTION: This data won't work because it is aggregated aross subscription duration. Need to constrina the data during aggregation step in JQL
+
+data1718 <- read_csv("./Data/ChurnSeg_Past_6_months_.csv") # 53203
+# Converting value.sub_Start and value.sub_End to Date (exclude time)
+data1718$value.sub_End <- as.Date(data1718$value.sub_End, "%Y-%m-%d");
+data1718$value.sub_Start <- as.Date(data1718$value.sub_Start, format="%Y-%m-%d")
+data1718 %>% 
+  filter(value.sub_Start >= "2017-08-15") # 31288
+```
+
+Time span of data pull is August 2017 - August 2018
+We use a time window to predict churn for new subscribers. Define this as TIME_WINDOW
+
+```{r}
+TIME_WINDOW <- 35 # 5 weeks
+```
+
+```{r}
+cohorts <- floor(as.integer(as.Date("2018-08-15") - as.Date("2017-08-15")) / TIME_WINDOW)
+date1 <- as.Date("2017-08-15") + TIME_WINDOW
+cohort1 <- data1718 %>% 
+  filter(value.sub_Start < date1)
+```
+
