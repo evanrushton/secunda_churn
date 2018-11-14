@@ -3,6 +3,8 @@ title: "Timespan Classifier 17-18"
 author: "Evan Rushton"
 date: "10/25/2018"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -19,28 +21,60 @@ library(caret)
 
 ```{r}
 
-# ATTENTION: The data "./Data/ChurnSeg_Past_6_months_.csv" won't work because it is aggregated aross subscription duration. Need to constrina the data during aggregation step in JQL
-
-data1718 <- read_csv("./Data/ChurnSeg_Past_6_months_.csv") # 53203
-dataASO <- read_csv("./Data/Churn_5-week_windows_Past_3_months.csv")
-# Converting value.sub_Start and value.sub_End to Date (exclude time)
-data1718$value.sub_End <- as.Date(data1718$value.sub_End, "%Y-%m-%d");
-data1718$value.sub_Start <- as.Date(data1718$value.sub_Start, format="%Y-%m-%d")
-data1718 %>% 
-  filter(value.sub_Start >= "2017-08-15") # 31288
+# ATTENTION: The data "./Data/ChurnSeg_Past_6_months_.csv" won't work because it is aggregated aross subscription duration. Need to constrain the data during aggregation step in JQL as J.F. did in his pull. "./Data/Churn_5-week_windows_Past_3_months.csv" is not up-to-date
+setwd("~/R-projects/codeSpark_churn")
+df10 <- read_csv("./Data/trackingWindow_Churn_Prediction-10days.csv")
+df33 <- read_csv("./Data/trackingWindow_Churn_Prediction-33days.csv")
+df65 <- read_csv("./Data/trackingWindow_Churn_Prediction-65days.csv")
+   
+ten_day_window <- df %>% 
+  filter(qa_days_subscribed < 40)
 ```
 
-Time span of data pull is August 2017 - August 2018
-We use a time window to predict churn for new subscribers. Define this as TIME_WINDOW
+# Check Data Quality
 
 ```{r}
-TIME_WINDOW <- 35 # 5 weeks
+
+xtabs(~ canceled + round(qa_days_subscribed), data=df10)
+
+
 ```
 
+
+
 ```{r}
-cohorts <- floor(as.integer(as.Date("2018-08-15") - as.Date("2017-08-15")) / TIME_WINDOW)
-date1 <- as.Date("2017-08-15") + TIME_WINDOW
-cohort1 <- data1718 %>% 
-  filter(value.sub_Start < date1)
+# ===== Visualize Vars =====
+df <- df10
+#Histograms to check distributions of numerical vars
+par(mfrow = c(3, 2)) 
+hist(df$time_spent / 60, main=paste("Minutes Played (N= ",length(df$time_spent),")", sep=""), xlab="")
+hist(df$time_spent[which(df$time_spent < 14400)] / 60, main=paste("Under 240 mins (N= ",length(df$time_spent[which(df$time_spent < 14400)]),")", sep=""), xlab="")
+hist(df$time_spent[which(df$time_spent < 7200)] / 60, main=paste("Under 120 mins (N= ",length(df$time_spent[which(df$time_spent < 7200)]),")", sep=""), xlab="") 
+hist(df$time_spent[which(df$time_spent < 3600)] / 60, main=paste("Under 60 mins (N= ",length(df$time_spent[which(df$time_spent < 3600)]),")", sep=""), xlab="") 
+hist(df$time_spent[which(df$time_spent < 2400)] / 60, main=paste("Under 40 mins (N= ",length(df$time_spent[which(df$time_spent < 2400)]),")", sep=""), xlab="") 
+hist(df$time_spent[which(df$time_spent < 1200)] / 60, main=paste("Under 20 mins (N= ",length(df$time_spent[which(df$time_spent < 1200)]),")", sep=""), xlab="") 
+
+
+hist(df$mission_complete_events , main=paste("Mission Complete (N= ",length(df$mission_complete_events),")", sep=""), xlab="")
+hist(df$mission_complete_events[which(df$mission_complete_events < 500)] , main=paste("Under 500 complete (N= ",length(df$mission_complete_events[which(df$mission_complete_events < 500)]),")", sep=""), xlab="")
+hist(df$mission_complete_events[which(df$mission_complete_events < 50)] , main=paste("Under 50 complete (N= ",length(df$mission_complete_events[which(df$mission_complete_events < 50)]),")", sep=""), xlab="")
+hist(df$mission_complete_events[which(df$mission_complete_events < 20)] , main=paste("Under 20 complete (N= ",length(df$mission_complete_events[which(df$mission_complete_events < 20)]),")", sep=""), xlab="")
+hist(df$mission_complete_events[which(df$mission_complete_events < 10)] , main=paste("Under 10 complete (N= ",length(df$mission_complete_events[which(df$mission_complete_events < 10)]),")", sep=""), xlab="")
+hist(df$mission_complete_events[which(df$mission_complete_events < 5)] , main=paste("Under 5 complete (N= ",length(df$mission_complete_events[which(df$mission_complete_events < 5)]),")", sep=""), xlab="")
+
+
+hist(df$qa_days_subscribed, main="Subscription Duration (days)")
+hist(df$qa_days_subscribed[which(df$qa_days_subscribed < 40)], main="Subscription Duration (Under 40 days)")
+
+#Counts to check distributions of categorical vars
+
+table(as.Date(df$qa_subscription_date))
+hist(df$value.play_game)
+hist(df$value.completed_puzzle)
+hist(log(df$value.completed_puzzle))
+table(df$value.account_Status)
+table(df$value.age)
+
+
 ```
 
