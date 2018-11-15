@@ -16,17 +16,22 @@ library(tidyverse)
 library(corrplot)
 library(randomForest)
 library(glmnet)
-library(caret)
+#library(caret)
 ```
 
 ```{r}
 
-# ATTENTION: The data "./Data/ChurnSeg_Past_6_months_.csv" won't work because it is aggregated aross subscription duration. Need to constrain the data during aggregation step in JQL as J.F. did in his pull. "./Data/Churn_5-week_windows_Past_3_months.csv" is not up-to-date
+# ATTENTION: The data "./Data/ChurnSeg_Past_6_months_.csv" won't work because it is aggregated aross subscription duration. Need to constrain the data during aggregation step in JQL as J.F. did in his pull. "./Data/Churn_5-week_windows_Past_3_months.csv" is not up-to-date with a few factors we want to include and a recent date range
 setwd("~/R-projects/codeSpark_churn")
 df10 <- read_csv("./Data/trackingWindow_Churn_Prediction-10days.csv")
+df10sub <- read_csv("./Data/trackingWindow_Churn_Prediction-10daysub.csv")
 df33 <- read_csv("./Data/trackingWindow_Churn_Prediction-33days.csv")
+df33sub <- read_csv("./Data/trackingWindow_Churn_Prediction-33daysub.csv")
 df65 <- read_csv("./Data/trackingWindow_Churn_Prediction-65days.csv")
+df65sub <- read_csv("./Data/trackingWindow_Churn_Prediction-65daysub.csv")
    
+df <- df10sub
+
 ten_day_window <- df %>% 
   filter(qa_days_subscribed < 40)
 ```
@@ -35,7 +40,24 @@ ten_day_window <- df %>%
 
 ```{r}
 
-xtabs(~ canceled + round(qa_days_subscribed), data=df10)
+sapply(df, function(y) length(which(is.na(y))))
+xtabs(~ canceled + round(qa_days_subscribed), data=df)
+table(as.Date(df$qa_subscription_date))
+table(as.Date(df$qa_last_event_date))
+xtabs(~ canceled + did_store, data=df)
+xtabs(~ canceled + did_minigame, data=df)
+xtabs(~ canceled + did_pets, data=df)
+xtabs(~ canceled + did_news, data=df)
+xtabs(~ canceled + did_game_maker_play, data=df)
+xtabs(~ canceled + did_game_maker_edit, data=df)
+xtabs(~ canceled + did_puzzle, data=df)
+xtabs(~ canceled + did_publish, data=df)
+xtabs(~ canceled + did_parent_portal, data=df)
+xtabs(~ canceled + did_snoopy, data=df)
+xtabs(~ canceled + did_temple, data=df)
+xtabs(~ canceled + did_story_session, data=df)
+
+
 
 
 ```
@@ -68,13 +90,24 @@ hist(df$qa_days_subscribed[which(df$qa_days_subscribed < 40)], main="Subscriptio
 
 #Counts to check distributions of categorical vars
 
-table(as.Date(df$qa_subscription_date))
+hist(as.Date(df$qa_subscription_date), breaks="weeks", freq=TRUE)
 hist(df$value.play_game)
 hist(df$value.completed_puzzle)
 hist(log(df$value.completed_puzzle))
 table(df$value.account_Status)
 table(df$value.age)
 
+
+```
+
+# What does the distribution of subscriptions over time look like?
+
+```{r}
+df <- df10
+
+df %>% 
+  ggplot(aes(x=as.Date(qa_subscription_date), y=time_spent)) +
+  geom_point()
 
 ```
 
