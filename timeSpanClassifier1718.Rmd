@@ -30,20 +30,25 @@ df33sub <- read_csv("./Data/trackingWindow_Churn_Prediction-33daysub.csv")
 df65 <- read_csv("./Data/trackingWindow_Churn_Prediction-65days.csv")
 df65sub <- read_csv("./Data/trackingWindow_Churn_Prediction-65daysub.csv")
    
-df <- df10sub
 
-ten_day_window <- df %>% 
-  filter(qa_days_subscribed < 40)
+one_month_window <- df33sub %>% 
+  filter(qa_days_subscribed > 10) %>% 
+  select(canceled, time_spent, mission_complete_events, game_maker_drafts, daily_coin_bonus, store_sessions, pet_days, studio_publishes, mission_reload_events, three_starred_levels, minigame_events, clicked_news_events, game_maker_play_events, game_maker_edit_events, parent_portal_tab_events, sandbox_events, app_open_events, snoopy, temple, story_session, did_store, did_minigame, did_pets, did_news, did_game_maker_play, did_game_maker_edit, did_puzzle, did_publish, did_parent_portal, did_snoopy, did_temple, did_story_session)
+
+ten_day_window <- df10sub %>% 
+  filter(qa_days_subscribed < 30) %>% 
+  select(canceled, time_spent, mission_complete_events, game_maker_drafts, daily_coin_bonus, store_sessions, pet_days, studio_publishes, mission_reload_events, three_starred_levels, minigame_events, clicked_news_events, game_maker_play_events, game_maker_edit_events, parent_portal_tab_events, sandbox_events, app_open_events, snoopy, temple, story_session, did_store, did_minigame, did_pets, did_news, did_game_maker_play, did_game_maker_edit, did_puzzle, did_publish, did_parent_portal, did_snoopy, did_temple, did_story_session)
 ```
 
 # Check Data Quality
 
 ```{r}
-
+df <- one_month_window
 sapply(df, function(y) length(which(is.na(y))))
 xtabs(~ canceled + round(qa_days_subscribed), data=df)
 table(as.Date(df$qa_subscription_date))
 table(as.Date(df$qa_last_event_date))
+xtabs(~ canceled + converted_from_trial, data=df)
 xtabs(~ canceled + did_store, data=df)
 xtabs(~ canceled + did_minigame, data=df)
 xtabs(~ canceled + did_pets, data=df)
@@ -58,7 +63,7 @@ xtabs(~ canceled + did_temple, data=df)
 xtabs(~ canceled + did_story_session, data=df)
 
 
-
+xtabs(~ as.Date(qa_subscription_date) + did_story_session, data=df33)
 
 ```
 
@@ -66,7 +71,7 @@ xtabs(~ canceled + did_story_session, data=df)
 
 ```{r}
 # ===== Visualize Vars =====
-df <- df10
+df <- df10sub
 #Histograms to check distributions of numerical vars
 par(mfrow = c(3, 2)) 
 hist(df$time_spent / 60, main=paste("Minutes Played (N= ",length(df$time_spent),")", sep=""), xlab="")
@@ -91,11 +96,11 @@ hist(df$qa_days_subscribed[which(df$qa_days_subscribed < 40)], main="Subscriptio
 #Counts to check distributions of categorical vars
 
 hist(as.Date(df$qa_subscription_date), breaks="weeks", freq=TRUE)
-hist(df$value.play_game)
+hist(df$create_profile_events)
 hist(df$value.completed_puzzle)
 hist(log(df$value.completed_puzzle))
 table(df$value.account_Status)
-table(df$value.age)
+table(df$daily_coin_bonus)
 
 
 ```
@@ -109,5 +114,38 @@ df %>%
   ggplot(aes(x=as.Date(qa_subscription_date), y=time_spent)) +
   geom_point()
 
+```
+
+# Logistic Regression
+```{r}
+logistic <- glm(canceled ~ ., data=ten_day_window, family = "binomial")
+summary(logistic10)
+
+
+logistic33 <- glm(canceled ~ ., data=one_month_window, family = "binomial")
+summary(logistic33)
+
+# Log-likelihood (psuedo R-squared)
+ll.null <- logistic$null.deviance/-2
+ll.proposed <- logistic$deviance/-2
+(ll.null - ll.proposed) / ll.null # overall effect size
+1-pchisq(2*(ll.proposed - ll.null), df=(length(logistic$coefficients)-1))
+
+# Plot
+df <- ten_day_window
+predicted.data <- data.frame(
+  probability.of.canceled=logistic$fitted.values,
+  canceled=df$canceled)
+
+predicted.data <- predicted.data[
+  order(predicted.data$probability.of.canceled, decreasing=FALSE),]
+predicted.data$rank <- 1:nrow(predicted.data)
+library(ggplot2)
+library(cowplot)
+ggplot(data=predicted.data, aes(x=rank, y=probability.of.canceled)) +
+  geom_point(aes(color=canceled), alpha=1, shape=4, stroke=2) +
+  xlab("Index") +
+  ylab("Predicted probability of getting canceled")
+ 
 ```
 
