@@ -1,5 +1,5 @@
 ---
-title: "codeSpark Churn"
+title: "Secunda: Churn"
 author: "Evan Rushton"
 date: "10/25/2018"
 output: html_document
