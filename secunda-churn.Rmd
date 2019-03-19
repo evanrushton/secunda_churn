@@ -5,6 +5,7 @@ date: "10/25/2018"
 output: html_document
 editor_options: 
   chunk_output_type: console
+runtime: shiny
 ---
 
 ```{r setup, include=FALSE}
@@ -31,8 +32,6 @@ app_opens <- read.csv('./Data/NBDparetoFebMay.csv')
 names(app_opens)[2] <- "date"
 app_opens$date <- format(as.POSIXct(app_opens$date / 1000, origin = "1970-01-01", tz = "America/Los_Angeles"), "%Y%m%d")
 app_opens$date <- as.Date(app_opens$date, "%Y%m%d")
-count_id <- count(app_opens$id)
-count_date <- count(app_opens$date)
 ```
 
 ### How many users were active?
@@ -62,10 +61,38 @@ sapply(app_opens, function(y) sum(length(which(is.na(y))))) # None - nice
 How often are users opening the app?
 
 ```{r}
+# Histogram
 app_opens %>% 
   ggplot(aes(id)) +
-  geom_histogram()
+  geom_histogram(binwidth=1)
+
+# Boxplot
+app_opens %>% 
+  mutate(n = n())
+  ggplot(n()) +
+  geom_boxplot()
 ```
+
+Some additional processing of the data allows for us to dig into user behavior a bit.
+
+```{r}
+app_opens %>% 
+  group_by(id) %>% 
+  mutate(First = first(date),
+            Last = last(date), 
+            duration = difftime(last(date), first(date), unit='day') + 1,
+            active = last(date) == as.Date('2018-06-01'))
+```
+
+
+What duration do users open the app over?
+
+```{r}
+app_opens %>% 
+  mutate(duration = )
+  geom_histogram(binwidth=1)
+```
+
 
 Slight downward trend in appOpen events by date in Spring
 
@@ -178,4 +205,4 @@ comp <- pnbd.PlotFreqVsConditionalExpectedFrequency(params2, T.star,
 ```
 
 ### Attribution
-This code is revised from emarkou on github https://github.com/blendo-app/NBD-Pareto-churn-model using the BTYD package. This flow is emulating @drob's Tidy Tuesday style https://www.youtube.com/watch?v=3-DRwg9yeNA
+This code is revised from emarkou on github https://github.com/blendo-app/NBD-Pareto-churn-model using the BTYD package. This flow is emulating @drob's Tidy Tuesday style
