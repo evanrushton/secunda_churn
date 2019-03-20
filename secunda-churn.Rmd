@@ -27,63 +27,89 @@ Can a model predict how likely someone will churn based on AppOpen data from a s
 
 ### First we load and clean the data
 ```{r}
-app_opens <- read.csv('./Data/NBDparetoFebMay.csv') 
+app_opens <- read.csv('./Data/NBDparetoFebMay.csv')
+
 # Convert time in ms to dates by day
 names(app_opens)[2] <- "date"
 app_opens$date <- format(as.POSIXct(app_opens$date / 1000, origin = "1970-01-01", tz = "America/Los_Angeles"), "%Y%m%d")
 app_opens$date <- as.Date(app_opens$date, "%Y%m%d")
 ```
 
-### How many users were active?
-
-```{r}
-length(unique(app_opens$uid))
-```
-
-31,230 unique users across 4 months. We can assign integer values to unique users with a join.
-
-```{r}
-users <- unique(app_opens$uid) %>% 
-  as.data.frame() %>% 
-  mutate(id = seq.int(length(unique(app_opens$uid))))
-names(users)[1] <- "uid"
-app_opens <- merge(app_opens, users, by = "uid") %>% 
-  arrange(uid, date)
-```
-
 # Exploration
 
-Check NA values
+### Check NA values
 ```{r}
 sapply(app_opens, function(y) sum(length(which(is.na(y))))) # None - nice
 ```
 
-How often are users opening the app?
+### How many users were active?
+
+```{r}
+length(unique(app_opens$uid))
+max(app_opens$date) - min(app_opens$date)
+```
+
+31,230 unique users across 121 days (4 months).
+
+### Outlier Processing
+
+The frequency of AppOpen events for each user can be made by table() or count().
+
+```{r}
+table <- table(app_opens$uid) 
+sort(table, decreasing = TRUE)
+```
+
+Two users have over 1000 AppOpen events and are either power users or internal QA subs. Our analysis is better off without them.
+
+```{r}
+# Processing Step
+counts <- app_opens %>% 
+  count(uid, sort=TRUE) %>% 
+  filter(n < 1000) 
+```
+
+### How often are users opening the app?
 
 ```{r}
 # Histogram
-app_opens %>% 
-  ggplot(aes(id)) +
-  geom_histogram(binwidth=1)
+counts %>%  
+  filter(n < 100) %>% 
+  ggplot(aes(n)) +
+  geom_histogram()
 
 # Boxplot
-app_opens %>% 
-  mutate(n = n())
-  ggplot(n()) +
+counts %>% 
+  filter(n < 30) # still 26,000 users with less than 30 AppOpen events
+  ggplot(aes(y=n)) +
   geom_boxplot()
+  
+# Descriptives
+library(psych)
+describe(counts$n)
+
+d <- density(counts$n)
+plot(d, main="Kernel Density of AppOpen events per User")
 ```
+
+The distribution is skewed right with a long tail and the median is 8 AppOpen events. The mean of 18 is an artifact of the skewed distribution and 8 is a better approximation of the center.
 
 Some additional processing of the data allows for us to dig into user behavior a bit.
 
 ```{r}
-app_opens %>% 
-  group_by(id) %>% 
-  mutate(First = first(date),
-            Last = last(date), 
-            duration = difftime(last(date), first(date), unit='day') + 1,
-            active = last(date) == as.Date('2018-06-01'))
-```
+# Create a users table
+users <- unique(app_opens$uid) %>% 
+  as.data.frame() %>% 
+  mutate(id = seq.int(length(unique(app_opens$uid)))) # Give each an integer id
+names(users)[1] <- "uid"
 
+app_opens <- app_opens %>% 
+  group_by(uid) %>% 
+  mutate(First = min(date),
+            Last = max(date), 
+            duration = difftime(max(date), min(date), unit='day') + 1,
+            active = max(date) == as.Date('2018-06-01'))
+```
 
 What duration do users open the app over?
 
@@ -104,6 +130,13 @@ count_date %>%
 ```
 
 ### NBD/Pareto
+
+We can assign integer values to unique users with a join. This integer key is used by the NBT/Pareto model.
+
+```{r}
+app_opens <- merge(app_opens, users, by = "uid") %>% 
+  arrange(uid, date)
+```
 
 ```{r}
 elogSpring <- app_opens[, c("id", "date")]
