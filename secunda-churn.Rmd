@@ -109,6 +109,9 @@ app_opens <- app_opens %>%
             Last = max(date), 
             duration = difftime(max(date), min(date), unit='day') + 1,
             active = max(date) == as.Date('2018-06-01'))
+
+users <- merge(users, app_opens, by = "uid", all.y = TRUE) %>% 
+  arrange(uid, date)
 ```
 
 What duration do users open the app over?

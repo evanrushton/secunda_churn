@@ -1,4 +1,4 @@
-# Scripts for EDA of codeSpark Segmentation data and initial churn model
+# Scripts for EDA of Segmentation data and initial churn model
 # Author: Evan Rushton 
 # Date: 9/26/18
 # Attribution: RF Model from Eleni Markou (https://github.com/blendo-app)
@@ -14,11 +14,12 @@ library(caret)
 df <- read.table("./Data/Segmentation_Report.csv", fill = TRUE, header = TRUE, sep = ",", na.strings = c("NA","")) # 64813 23
 
 # Correlation plot for numeric variables
-df.n<-sapply(df,class)=='numeric' | sapply(df,class)=='integer' # numeric columns
-dfNum<-df[,df.n] # subset numeric
-corr<-cor(dfNum)
+df.n <- sapply(df,class)=='numeric' | sapply(df,class)=='integer' # numeric columns
+dfNum <- df[,df.n] # subset numeric
+dfNum <- dfNum[,c(2,1,3:16)] # reorder so Churn is first
+corr <- cor(dfNum)
 corrplot(corr, type = "lower", tl.pos = "ld")
-corr[ 1:16, 2]
+corr[ 1:16, 1]
 
 # ===== Data Cleaning =====
 # Check NAs
@@ -35,13 +36,13 @@ df$value.sub_Start <- as.Date(df$value.sub_Start, format="%Y-%m-%d")
 
 # Duration of subscription
 df$value.sub_End[which(df$value.account_Status=="Active Subscriber")] <- "2018-08-06" # Make blank end dates the current date
-df$value.sub_Duration <- as.integer(df$value.sub_End - df$value.sub_Start) # Days
+df$value.sub_Duration <- as.integer(df$value.sub_End - df$value.sub_Start) # Add sub duration feature in days
 
 # Gifted Accounts
 df[which(format(df$value.sub_End, "%Y")==2118),] # Active Gifted are incorrectly labeled churn=1
 table(format(df$value.sub_End[which(format(df$value.sub_End, "%Y")>2100)], "%Y")) # Remove "Gifted" accounts should solve this
-df <- df[which(!df$value.account_Status %in% c("Active Gifted", "Expired Gifted")),]
-df$value.account_Status[which(is.na(df$value.sub_End))]
+df <- df[which(!df$value.account_Status %in% c("Active Gifted", "Expired Gifted")),] # (64446 24)
+df$value.account_Status[which(is.na(df$value.sub_End))] # seems to be evenly distributed across account types?
 
 # Remove Outliers (Initially 64446 24)
 dim(df[which(df$value.minutes_played > 10000), ] ) # check variables/thresholds
@@ -71,7 +72,7 @@ hist(df$value.completed_puzzle)
 hist(log(df$value.completed_puzzle))
 table(df$value.account_Status)
 table(df$value.age)
-
+dev.off()
 # plot churn versus some of the more straight-forward vars
 #Pairwise plots
 ggplot(df, aes(x= as.factor(Churn.), y = value.sub_Duration))+
@@ -84,6 +85,11 @@ ggplot(df,aes(x= value.sub_Duration, y= value.minutes_played)) + geom_point(aes(
 
 boxplot(value.sub_Duration~Churn.,data=df, main="Subscription Duration, Churn or No Churn", 
         xlab="Churn", ylab="Subscription Duration (Days)")
+
+ggplot(df, aes(x= value.sub_Duration)) + geom_density(aes(color=as.factor(Churn.))) + xlab("Days subscribed (N = 61368)")
+nrow(df[which(df$value.sub_Duration < 150),])
+ggplot(df[which(df$value.sub_Duration < 150),], aes(x= value.sub_Duration)) + geom_density(aes(color=as.factor(Churn.))) + xlab("Days subscribed (N = 39365)")
+
 
 # ===== Feature Engineering =====
 # Ratio of minutes played : length of subscription
